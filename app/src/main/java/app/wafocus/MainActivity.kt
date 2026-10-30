@@ -65,6 +65,12 @@ class MainActivity : Activity() {
         prefs = Prefs(this)
         window.statusBarColor = greenDark
         setContentView(buildUi())
+        if (android.os.Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1)
+        }
     }
 
     override fun onStart() {
@@ -82,6 +88,7 @@ class MainActivity : Activity() {
         super.onResume()
         banner.visibility = if (listenerEnabled()) View.GONE else View.VISIBLE
         db.purge(prefs.retentionDays)
+        db.touch()
         if (!prefs.askedSetup) {
             prefs.askedSetup = true
             showSettings()

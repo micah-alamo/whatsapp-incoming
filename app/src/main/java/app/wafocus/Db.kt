@@ -53,7 +53,24 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "wafocus.db",
             put("kind", m.kind)
             put("is_read", 0)
         }
-        return writableDatabase.insertWithOnConflict("msg", null, cv, SQLiteDatabase.CONFLICT_IGNORE) != -1L
+        val added = writableDatabase.insertWithOnConflict("msg", null, cv, SQLiteDatabase.CONFLICT_IGNORE) != -1L
+        if (added) touch()
+        return added
+    }
+
+    private val app: Context = ctx.applicationContext
+
+    /** Refresh the silent unread notification (drives the launcher icon badge). */
+    @Synchronized
+    fun touch() {
+        var dm = 0
+        var mention = 0
+        readableDatabase.rawQuery("SELECT kind, COUNT(*) FROM msg WHERE is_read=0 GROUP BY kind", null).use { c ->
+            while (c.moveToNext()) {
+                if (c.getInt(0) == Kind.DM) dm += c.getInt(1) else mention += c.getInt(1)
+            }
+        }
+        Notifier.update(app, dm, mention)
     }
 
     /** filter: 0 = everything, 1 = personal only, 2 = mentions/keywords only. */
@@ -90,16 +107,19 @@ class Db private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "wafocus.db",
     fun markRead(ids: List<Long>) {
         if (ids.isEmpty()) return
         writableDatabase.execSQL("UPDATE msg SET is_read=1 WHERE id IN (${ids.joinToString(",")})")
+        touch()
     }
 
     @Synchronized
     fun markChatRead(chat: String) {
         writableDatabase.execSQL("UPDATE msg SET is_read=1 WHERE chat=? AND is_read=0", arrayOf(chat))
+        touch()
     }
 
     @Synchronized
     fun markAllRead() {
         writableDatabase.execSQL("UPDATE msg SET is_read=1 WHERE is_read=0")
+        touch()
     }
 
     @Synchronized
